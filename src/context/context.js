@@ -14,20 +14,44 @@ const GithubProvider = ({ children }) => {
   const [followers, setFollowers] = useState(mockFollowers);
 
   const [requests, setRequests] = useState(0);
-  const [loading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const [error, setError] = useState({ show: false, msg: "" });
 
   const searchGithubUser = async (user) => {
     toggleError();
+    setIsLoading(true);
+
     const response = await axios(`${rootUrl}/users/${user}`).catch((err) => {
       console.log(error);
     });
+
     if (response) {
       setGithubUser(response.data);
+      const { login, followers_url } = response.data;
+
+      await Promise.allSettled([
+        axios(`${rootUrl}/users/${login}/repos?per_page=100`),
+        axios(`${followers_url}?per_page=100`),
+      ]).then((results) => {
+        const [repos, followers] = results;
+        const status = "fulfilled";
+        if (repos.status === status) {
+          setRepos(repos.value.data);
+        }
+        if (followers.status === status) {
+          setFollowers(followers.value.data);
+        }
+      });
+
+      // - [Repos](https://api.github.com/users/john-smilga/repos?per_page=100)
+      // - [Followers](https://api.github.com/users/john-smilga/followers)
     } else {
       toggleError(true, "there is no user with that username");
     }
+
+    checkRequests();
+    setIsLoading(false);
   };
 
   const checkRequests = () => {
@@ -61,6 +85,7 @@ const GithubProvider = ({ children }) => {
         requests,
         error,
         searchGithubUser,
+        isLoading,
       }}
     >
       {children}
